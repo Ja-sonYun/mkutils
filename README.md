@@ -5,25 +5,21 @@ Reusable Makefile modules.
 ## Installation
 
 ```makefile
-include init.mk
-$(call import,colors)
-$(call import,help)
+include args.mk
+include colors.mk
+include help.mk
 ```
 
-Modules are downloaded from GitHub and cached in `.mkutils/`.
+Copy desired modules to your project.
 
 ## Modules
-
-### init.mk
-
-Bootstrap module providing `import` function.
 
 ### args.mk
 
 Handle command line arguments after `--`.
 
 ```makefile
-$(call import,args)
+include args.mk
 
 run: ## Run with arguments
 	./app $(RUN_ARGS)
@@ -38,7 +34,7 @@ make run -- --verbose --config=prod
 Terminal colors respecting `NO_COLOR`.
 
 ```makefile
-$(call import,colors)
+include colors.mk
 
 build:
 	$(call print_info,"Building...")
@@ -64,7 +60,7 @@ build:
 Dependency management with update detection.
 
 ```makefile
-$(call import,deps)
+include deps.mk
 
 # Basic: tracks file modification time
 $(eval $(call create-deps-target,\
@@ -86,7 +82,7 @@ $(eval $(call create-deps-target-with-hash,\
 Auto-generated help from `##` comments.
 
 ```makefile
-$(call import,help)
+include help.mk
 
 HELP_PROJECT_NAME := My Project
 HELP_VERSION := 1.0.0

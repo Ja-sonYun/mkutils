@@ -96,7 +96,7 @@ endef
 # Usage: $(call print_header,title)
 define print_header
 	@printf '\n$(BOLD_CYAN)%s$(RESET)\n' $(1)
-	@printf '$(CYAN)%s$(RESET)\n' "$$(printf '%*s' $${#$(1)} | tr ' ' '=')"
+	@printf '$(CYAN)%s$(RESET)\n' "$$(printf '%*s' $$(printf '%s' $(1) | wc -c) '' | tr ' ' '=')"
 endef
 
 # Usage: $(call print_status,status,message)
