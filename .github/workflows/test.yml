@@ -28,5 +28,5 @@ jobs:
         env:
           TERM: xterm
           MAKEFLAGS: --no-print-directory
-          BATS_LIB_PATH: /usr/lib
+          BATS_LIB_PATH: /usr/lib:/usr/local/lib
         run: bats test/*.bats
