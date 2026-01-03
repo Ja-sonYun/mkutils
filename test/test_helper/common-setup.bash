@@ -18,9 +18,3 @@ _common_teardown() {
         rm -rf "$TEST_TEMP_DIR"
     fi
 }
-
-run_make() {
-    local makefile="$1"
-    shift
-    run make -f "$makefile" "$@"
-}
