@@ -66,8 +66,7 @@ teardown() {
     export NO_COLOR=1
     run make test-print-info
     assert_success
-    assert_output --partial "[INFO]"
-    assert_output --partial "Test message"
+    assert_output "[INFO] Test message"
 }
 
 @test "colors: print_success outputs [OK]" {
@@ -75,7 +74,7 @@ teardown() {
     export NO_COLOR=1
     run make test-print-success
     assert_success
-    assert_output --partial "[OK]"
+    assert_output "[OK] Success"
 }
 
 @test "colors: print_warning outputs [WARN]" {
@@ -83,7 +82,7 @@ teardown() {
     export NO_COLOR=1
     run make test-print-warning
     assert_success
-    assert_output --partial "[WARN]"
+    assert_output "[WARN] Warning"
 }
 
 @test "colors: print_error outputs [ERROR]" {
@@ -91,7 +90,7 @@ teardown() {
     export NO_COLOR=1
     run make test-print-error
     assert_success
-    assert_output --partial "[ERROR]"
+    assert_output "[ERROR] Error"
 }
 
 @test "colors: print_step outputs step format" {
@@ -99,18 +98,17 @@ teardown() {
     export NO_COLOR=1
     run make test-print-step
     assert_success
-    assert_output --partial "[1/3]"
-    assert_output --partial "Step"
+    assert_output "[1/3] Step"
 }
-
-# Missing functions
 
 @test "colors: print_header outputs title" {
     cd "$TEST_TEMP_DIR"
     export NO_COLOR=1
     run make test-print-header
     assert_success
-    assert_output --partial "Title"
+
+    expected=$'\nTitle\n====='
+    assert_output "$expected"
 }
 
 @test "colors: print_status outputs custom status" {
@@ -118,11 +116,8 @@ teardown() {
     export NO_COLOR=1
     run make test-print-status
     assert_success
-    assert_output --partial "[CUSTOM]"
-    assert_output --partial "Status message"
+    assert_output "[CUSTOM] Status message"
 }
-
-# Edge cases
 
 @test "colors: NO_COLOR with any value disables colors" {
     cd "$TEST_TEMP_DIR"
@@ -137,7 +132,6 @@ teardown() {
     unset NO_COLOR
     run make test-green
     assert_success
-    # Should contain green ANSI code
     [[ "$output" == *$'\033[0;32m'* ]]
 }
 
@@ -146,6 +140,5 @@ teardown() {
     export NO_COLOR=""
     run make test-red
     assert_success
-    # Empty NO_COLOR means colors enabled
     [[ "$output" == *$'\033['* ]]
 }

@@ -28,38 +28,31 @@ teardown() {
     _common_teardown
 }
 
-@test "help: shows project name" {
+@test "help: full output matches expected" {
     cd "$TEST_TEMP_DIR"
     export NO_COLOR=1
     run make help
     assert_success
-    assert_output --partial "Test Project"
-}
 
-@test "help: shows version" {
-    cd "$TEST_TEMP_DIR"
-    export NO_COLOR=1
-    run make help
-    assert_success
-    assert_output --partial "v1.2.3"
-}
+    read -r -d '' expected << 'EOF' || true
+Test Project v1.2.3
 
-@test "help: shows targets with descriptions" {
-    cd "$TEST_TEMP_DIR"
-    export NO_COLOR=1
-    run make help
-    assert_success
-    assert_output --partial "build"
-    assert_output --partial "Build the project"
-}
+Usage: make [target] [VARIABLE=value]
 
-@test "help: shows section headers" {
-    cd "$TEST_TEMP_DIR"
-    export NO_COLOR=1
-    run make help
-    assert_success
-    assert_output --partial "Build"
-    assert_output --partial "Test"
+Targets:
+
+  Build
+    build                Build the project
+
+  Test
+    test-target          Run tests
+
+  Help
+    help                 Show this help message
+    version              Show version information
+
+EOF
+    assert_output "$expected"
 }
 
 @test "help: version target outputs version" {
@@ -74,7 +67,26 @@ teardown() {
     export NO_COLOR=1
     run make
     assert_success
-    assert_output --partial "Targets:"
+
+    read -r -d '' expected << 'EOF' || true
+Test Project v1.2.3
+
+Usage: make [target] [VARIABLE=value]
+
+Targets:
+
+  Build
+    build                Build the project
+
+  Test
+    test-target          Run tests
+
+  Help
+    help                 Show this help message
+    version              Show version information
+
+EOF
+    assert_output "$expected"
 }
 
 @test "help: extracts version from file" {
@@ -90,10 +102,21 @@ EOF
     export NO_COLOR=1
     run make help
     assert_success
-    assert_output --partial "v2.0.0"
-}
 
-# Missing configuration options
+    read -r -d '' expected << 'EOF' || true
+File Version v2.0.0}
+
+Usage: make [target] [VARIABLE=value]
+
+Targets:
+
+  Help
+    help                 Show this help message
+    version              Show version information
+
+EOF
+    assert_output "$expected"
+}
 
 @test "help: HELP_DESCRIPTION displays text" {
     cd "$TEST_TEMP_DIR"
@@ -107,7 +130,20 @@ EOF
     export NO_COLOR=1
     run make help
     assert_success
-    assert_output --partial "This is a test description"
+
+    read -r -d '' expected << 'EOF' || true
+Desc Test
+  This is a test description
+Usage: make [target] [VARIABLE=value]
+
+Targets:
+
+  Help
+    help                 Show this help message
+    version              Show version information
+
+EOF
+    assert_output "$expected"
 }
 
 @test "help: HELP_VARIABLES displays" {
@@ -122,8 +158,23 @@ EOF
     export NO_COLOR=1
     run make help
     assert_success
-    assert_output --partial "Variables:"
-    assert_output --partial "VAR1"
+
+    read -r -d '' expected << 'EOF' || true
+Vars Test
+
+Usage: make [target] [VARIABLE=value]
+
+Variables:
+  VAR1 - First variable
+
+Targets:
+
+  Help
+    help                 Show this help message
+    version              Show version information
+
+EOF
+    assert_output "$expected"
 }
 
 @test "help: HELP_WIDTH changes column width" {
@@ -141,10 +192,24 @@ EOF
     export NO_COLOR=1
     run make help
     assert_success
-    assert_output --partial "verylongtargetname"
-}
 
-# Edge cases
+    read -r -d '' expected << 'EOF' || true
+Project
+
+Usage: make [target] [VARIABLE=value]
+
+Targets:
+
+  Commands
+    verylongtargetname             A target with a long name
+
+  Help
+    help                           Show this help message
+    version                        Show version information
+
+EOF
+    assert_output "$expected"
+}
 
 @test "help: no version displayed when empty" {
     cd "$TEST_TEMP_DIR"
@@ -157,9 +222,20 @@ EOF
     export NO_COLOR=1
     run make help
     assert_success
-    assert_output --partial "No Version"
-    # Should not have "v" prefix without version
-    refute_output --partial " v "
+
+    read -r -d '' expected << 'EOF' || true
+No Version
+
+Usage: make [target] [VARIABLE=value]
+
+Targets:
+
+  Help
+    help                 Show this help message
+    version              Show version information
+
+EOF
+    assert_output "$expected"
 }
 
 @test "help: missing version file handled gracefully" {
@@ -174,8 +250,20 @@ EOF
     export NO_COLOR=1
     run make help
     assert_success
-    # Should still work without crashing
-    assert_output --partial "Missing File"
+
+    read -r -d '' expected << 'EOF' || true
+Missing File
+
+Usage: make [target] [VARIABLE=value]
+
+Targets:
+
+  Help
+    help                 Show this help message
+    version              Show version information
+
+EOF
+    assert_output "$expected"
 }
 
 @test "help: target without ## not shown in help" {
@@ -195,6 +283,19 @@ EOF
     export NO_COLOR=1
     run make help
     assert_success
-    assert_output --partial "visible"
-    refute_output --partial "hidden"
+
+    read -r -d '' expected << 'EOF' || true
+Hidden Target
+
+Usage: make [target] [VARIABLE=value]
+
+Targets:
+    visible              This is visible
+
+  Help
+    help                 Show this help message
+    version              Show version information
+
+EOF
+    assert_output "$expected"
 }

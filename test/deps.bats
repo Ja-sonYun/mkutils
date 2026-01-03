@@ -31,7 +31,13 @@ teardown() {
     export NO_COLOR=1
     run make test-deps
     assert_success
-    assert_output --partial "install"
+
+    read -r -d '' expected << 'EOF' || true
+[DEPS] Installing dependencies for  test-deps...
+install
+[OK] Dependencies installed for  test-deps
+EOF
+    assert_output "$expected"
     [ -f "$TEST_TEMP_DIR/node_modules/.installed" ]
 }
 
@@ -42,7 +48,12 @@ teardown() {
     export NO_COLOR=1
     run make test-deps
     assert_success
-    assert_output --partial "up to date"
+
+    read -r -d '' expected << 'EOF' || true
+[DEPS] Installing dependencies for  test-deps...
+[OK] Dependencies for  test-deps are up to date
+EOF
+    assert_output "$expected"
 }
 
 @test "deps: force always installs" {
@@ -52,7 +63,13 @@ teardown() {
     export NO_COLOR=1
     run make test-deps-force
     assert_success
-    assert_output --partial "Force"
+
+    read -r -d '' expected << 'EOF' || true
+[FORCE] Force installing dependencies for  test-deps...
+echo "install"
+install
+EOF
+    assert_output "$expected"
 }
 
 @test "deps: clean removes directory" {
@@ -61,6 +78,12 @@ teardown() {
     export NO_COLOR=1
     run make test-deps-clean
     assert_success
+
+    read -r -d '' expected << 'EOF' || true
+[CLEAN] Cleaning  test-deps dependencies...
+rm -rf node_modules
+EOF
+    assert_output "$expected"
     [ ! -d "$TEST_TEMP_DIR/node_modules" ]
 }
 
@@ -69,6 +92,14 @@ teardown() {
     export NO_COLOR=1
     run make test-hash
     assert_success
+
+    read -r -d '' expected << 'EOF' || true
+[DEPS] Installing dependencies for  test-hash...
+echo "install-hash"
+install-hash
+[OK] Dependencies installed for  test-hash
+EOF
+    assert_output "$expected"
     [ -f "$TEST_TEMP_DIR/.deps/.deps-hash" ]
 }
 
@@ -78,7 +109,7 @@ teardown() {
     make test-hash
     run make test-hash-check
     assert_success
-    assert_output --partial "up to date"
+    assert_output "[OK] Dependencies for  test-hash are up to date"
 }
 
 @test "deps-hash: check detects outdated" {
@@ -88,21 +119,25 @@ teardown() {
     echo '{"name": "modified"}' > "$TEST_TEMP_DIR/package.json"
     run make test-hash-check
     assert_success
-    assert_output --partial "need updating"
+    assert_output "[WARN] Dependencies for  test-hash need updating"
 }
-
-# Edge cases - file modification detection
 
 @test "deps: reinstalls when package file is newer" {
     cd "$TEST_TEMP_DIR"
     mkdir -p node_modules
     touch node_modules/.installed
     sleep 1
-    touch package.json  # Make package.json newer
+    touch package.json
     export NO_COLOR=1
     run make test-deps
     assert_success
-    assert_output --partial "install"
+
+    read -r -d '' expected << 'EOF' || true
+[DEPS] Installing dependencies for  test-deps...
+install
+[OK] Dependencies installed for  test-deps
+EOF
+    assert_output "$expected"
 }
 
 @test "deps: reinstalls when lock file is newer" {
@@ -110,14 +145,18 @@ teardown() {
     mkdir -p node_modules
     touch node_modules/.installed
     sleep 1
-    touch package-lock.json  # Make lock file newer
+    touch package-lock.json
     export NO_COLOR=1
     run make test-deps
     assert_success
-    assert_output --partial "install"
-}
 
-# Hash version additional targets
+    read -r -d '' expected << 'EOF' || true
+[DEPS] Installing dependencies for  test-deps...
+install
+[OK] Dependencies installed for  test-deps
+EOF
+    assert_output "$expected"
+}
 
 @test "deps-hash: force reinstalls" {
     cd "$TEST_TEMP_DIR"
@@ -125,7 +164,13 @@ teardown() {
     make test-hash
     run make test-hash-force
     assert_success
-    assert_output --partial "Force"
+
+    read -r -d '' expected << 'EOF' || true
+[FORCE] Force installing dependencies for  test-hash...
+echo "install-hash"
+install-hash
+EOF
+    assert_output "$expected"
 }
 
 @test "deps-hash: clean removes directory" {
@@ -135,10 +180,14 @@ teardown() {
     [ -d "$TEST_TEMP_DIR/.deps" ]
     run make test-hash-clean
     assert_success
+
+    read -r -d '' expected << 'EOF' || true
+[CLEAN] Cleaning  test-hash dependencies...
+rm -rf .deps
+EOF
+    assert_output "$expected"
     [ ! -d "$TEST_TEMP_DIR/.deps" ]
 }
-
-# Edge cases - lock file modification
 
 @test "deps-hash: detects lock file change" {
     cd "$TEST_TEMP_DIR"
@@ -147,5 +196,5 @@ teardown() {
     echo '{"lockfileVersion": 2}' > "$TEST_TEMP_DIR/package-lock.json"
     run make test-hash-check
     assert_success
-    assert_output --partial "need updating"
+    assert_output "[WARN] Dependencies for  test-hash need updating"
 }
