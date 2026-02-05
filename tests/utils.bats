@@ -322,8 +322,9 @@ teardown() {
     export NO_COLOR=1
     run make test-cmd
     assert_success
-    [[ "${lines[0]}" == '$ npm install' ]]
-    [[ "${lines[1]}" == *"----"* ]]
+    [[ "${lines[0]}" == *"----"* ]]
+    [[ "${lines[1]}" == '$ npm install' ]]
+    [[ "${lines[2]}" == *"----"* ]]
 }
 
 # === Validation functions ===
@@ -465,6 +466,18 @@ EOF
     [[ "$output" == "staging" ]]
 }
 
+@test "inputs: select non-tty supports descriptions" {
+    cd "$TEST_TEMP_DIR"
+    cat >> Makefile << 'EOF'
+.PHONY: test-select-desc
+test-select-desc:
+	@echo $(shell $(call select,dev[Development]|staging[Staging]|prod[Production],Select env,staging))
+EOF
+    run bash -c 'make test-select-desc < /dev/null'
+    assert_success
+    [[ "$output" == "staging" ]]
+}
+
 @test "inputs: select non-tty returns first when no default" {
     cd "$TEST_TEMP_DIR"
     cat >> Makefile << 'EOF'
@@ -500,6 +513,19 @@ EOF
     assert_success
     assert_line "base"
     assert_line "dev"
+}
+
+@test "inputs: select-multi non-tty supports descriptions" {
+    cd "$TEST_TEMP_DIR"
+    cat >> Makefile << 'EOF'
+.PHONY: test-select-multi-desc
+test-select-multi-desc:
+	@for i in $(shell $(call select-multi,base[Base]|dev[Dev]|prod[Prod],Select sources,base|prod)); do echo $$i; done
+EOF
+    run bash -c 'make test-select-multi-desc < /dev/null'
+    assert_success
+    assert_line "base"
+    assert_line "prod"
 }
 
 @test "inputs: select-multi non-tty returns empty when no defaults" {
@@ -763,7 +789,9 @@ EOF
     export NO_COLOR=1
     run make test-msg-cmd-complex TEST_INPUT='packer build -var="image_type=base" -var="create_box=true"'
     assert_success
-    [[ "${lines[0]}" == '$ packer build -var="image_type=base" -var="create_box=true"' ]]
+    [[ "${lines[0]}" == *"----"* ]]
+    [[ "${lines[1]}" == '$ packer build -var="image_type=base" -var="create_box=true"' ]]
+    [[ "${lines[2]}" == *"----"* ]]
 }
 
 # === String ===

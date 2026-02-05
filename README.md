@@ -179,6 +179,7 @@ start:
 ```
 
 Use `|` as separator for multiple values.
+Descriptions are supported with `value[description]` (optional).
 
 **Functions:** `require-path` `require-cmd` `require-env` `require-args` `require-ports` `require-memory` `require-storage` `confirm` `require-regex` `require-version` `retry` `wait-for-port` `wait-for-url`
 
@@ -187,10 +188,10 @@ Use `|` as separator for multiple values.
 ```makefile
 deploy:
 	# Single select (first option is default if not specified)
-	$(eval ENV := $(shell $(call select,dev|staging|prod,Select environment,dev)))
+	$(eval ENV := $(shell $(call select,dev[Development]|staging[Staging]|prod[Production],Select environment,dev)))
 
 	# Multi select
-	$(eval SOURCES := $(shell $(call select-multi,base|dev|prod,Select sources,base|dev)))
+	$(eval SOURCES := $(shell $(call select-multi,base[Base]|dev[Dev]|prod[Prod],Select sources,base|dev)))
 
 	# Text input
 	$(eval NAME := $(shell $(call input,Enter name,Anonymous)))

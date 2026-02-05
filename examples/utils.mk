@@ -51,7 +51,7 @@ demo-regex: ## Validate version format (run: make demo-regex VERSION=1.2.3)
 
 ##@ Interactive
 demo-select: ## Select from options
-	$(eval ENV := $(shell $(call select,dev|staging|prod,Select environment,dev)))
+	$(eval ENV := $(shell $(call select,dev[Development]|staging[Staging]|prod[Production],Select environment,dev)))
 	$(call require-input,$(ENV),Selection cancelled)
 	$(call msg-success,"Selected: $(ENV)")
 
@@ -61,7 +61,7 @@ demo-input: ## Text input with default
 	$(call msg-success,"Hello $(NAME)")
 
 demo-select-multi: ## Multi-select from options
-	$(eval SOURCES := $(shell $(call select-multi,base|dev|ctf|prod,Select sources,base|dev)))
+	$(eval SOURCES := $(shell $(call select-multi,base[Base]|dev[Dev]|ctf[CTF]|prod[Prod],Select sources,base|dev)))
 	$(call require-input,$(SOURCES),Selection cancelled)
 	$(call msg-success,"Selected: $(SOURCES)")
 

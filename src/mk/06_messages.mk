@@ -67,7 +67,7 @@ endef
 #   $(call msg-cmd,packer build -var="image_type=base")
 define msg-cmd
 	$(call msg-sep)
-	@printf '$(DIM)$$ %s$(RESET)\n' "$(call escape,dq|backtick,$(1))"
+	@printf '$(DIM)$$ %s$(RESET)\n' '$(call escape,sq,$(1))'
 	$(call msg-sep)
 endef
 

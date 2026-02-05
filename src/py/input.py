@@ -151,19 +151,40 @@ def get_key():
         fcntl.fcntl(fd, fcntl.F_SETFL, old_flags)
 
 
+def parse_option(raw):
+    if raw.endswith("]") and "[" in raw:
+        idx = raw.rfind("[")
+        if idx >= 0:
+            return raw[:idx], raw[idx + 1 : -1]
+    return raw, ""
+
+
+def parse_options(raw_options):
+    return [{"value": v, "desc": d} for v, d in (parse_option(o) for o in raw_options)]
+
+
+def option_label(opt):
+    if opt["desc"]:
+        return "{} - {}".format(opt["value"], opt["desc"])
+    return opt["value"]
+
+
 def select_ui(options, prompt, default):
+    parsed = parse_options(options)
+    values = [o["value"] for o in parsed]
     if not sys.stdin.isatty():
-        return default if default in options else options[0]
-    idx = options.index(default) if default in options else 0
-    n = len(options)
+        return default if default in values else values[0]
+    idx = values.index(default) if default in values else 0
+    n = len(parsed)
     w = TerminalWriter(sys.stderr)
 
     def render(first=False):
         if not first:
             w.clear()
         w.writeln(ANSI.cyan("[?]") + " {}:".format(prompt))
-        for i, opt in enumerate(options):
-            w.write(ANSI.cyan("> " + opt) if i == idx else "  " + opt)
+        for i, opt in enumerate(parsed):
+            label = option_label(opt)
+            w.write(ANSI.cyan("> " + label) if i == idx else "  " + label)
             if i < n - 1:
                 w.write("\n")
         w.flush()
@@ -186,28 +207,31 @@ def select_ui(options, prompt, default):
     sys.stderr.write(
         ANSI.show_cursor()
         + ANSI.green("[OK]")
-        + " {}: {}\n".format(prompt, options[idx])
+        + " {}: {}\n".format(prompt, values[idx])
     )
-    return options[idx]
+    return values[idx]
 
 
 def select_multi_ui(options, prompt, defaults):
+    parsed = parse_options(options)
+    values = [o["value"] for o in parsed]
     if not sys.stdin.isatty():
         return defaults if defaults else []
-    selected = set(i for i, o in enumerate(options) if o in set(defaults or []))
-    idx, n = 0, len(options)
+    selected = set(i for i, v in enumerate(values) if v in set(defaults or []))
+    idx, n = 0, len(parsed)
     w = TerminalWriter(sys.stderr)
 
     def render(first=False):
         if not first:
             w.clear()
         w.writeln(ANSI.cyan("[?]") + " {}:".format(prompt))
-        for i, opt in enumerate(options):
+        for i, opt in enumerate(parsed):
+            label = option_label(opt)
             chk = "[x]" if i in selected else "[ ]"
             w.write(
-                ANSI.cyan("> {} {}".format(chk, opt))
+                ANSI.cyan("> {} {}".format(chk, label))
                 if i == idx
-                else "  {} {}".format(chk, opt)
+                else "  {} {}".format(chk, label)
             )
             if i < n - 1:
                 w.write("\n")
@@ -230,7 +254,7 @@ def select_multi_ui(options, prompt, defaults):
             sys.exit(1)
         render()
     w.clear()
-    result = [options[i] for i in sorted(selected)]
+    result = [values[i] for i in sorted(selected)]
     sys.stderr.write(
         ANSI.show_cursor()
         + ANSI.green("[OK]")
