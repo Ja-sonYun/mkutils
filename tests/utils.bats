@@ -735,7 +735,12 @@ EOF
 @test "wait-for-url: succeeds with valid URL" {
     cd "$TEST_TEMP_DIR"
     export NO_COLOR=1
-    run make test-wait-url TEST_URL="https://httpbin.org/get"
+    local port
+    port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("",0)); print(s.getsockname()[1]); s.close()')
+    python3 -m http.server "$port" --bind 127.0.0.1 >/dev/null 2>&1 &
+    local server_pid=$!
+    run make test-wait-url TEST_URL="http://localhost:$port/"
+    kill "$server_pid" 2>/dev/null || true
     assert_success
     [[ "$output" == *"url ready"* ]]
 }
