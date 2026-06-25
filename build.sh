@@ -23,11 +23,11 @@ for f in "$SRC_DIR"/mk/*.mk; do
 	cat "$f"
 	echo ""
 done |
-	sed "s|__SEMVER_BUMP_AWK_B64__|$b64_semver_bump|g" |
-	sed "s|__ESCAPE_AWK_B64__|$b64_escape|g" |
-	sed "s|__VERSION_CMP_AWK_B64__|$b64_version_cmp|g" |
-	sed "s|__HELP_AWK_B64__|$b64_help|g" |
-	sed "s|__UTILS_PY_B64__|$b64_utils_py|g" \
-		>"$DIST_DIR/utils.mk"
+sed "s|__SEMVER_BUMP_AWK_B64__|$b64_semver_bump|g" |
+sed "s|__ESCAPE_AWK_B64__|$b64_escape|g" |
+sed "s|__VERSION_CMP_AWK_B64__|$b64_version_cmp|g" |
+sed "s|__HELP_AWK_B64__|$b64_help|g" |
+sed "s|__UTILS_PY_B64__|$b64_utils_py|g" \
+	>"$DIST_DIR/utils.mk"
 
 echo "Done: $DIST_DIR/utils.mk"

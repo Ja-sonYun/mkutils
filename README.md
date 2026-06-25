@@ -28,6 +28,26 @@ include dist/utils.mk
 
 Copy `dist/utils.mk` to your project, or add this repository as a git submodule and include the file from there.
 
+### Nix overlay (auto-include)
+
+Use the overlay to get a wrapped `make` that always includes `utils.mk` — no `include` line in your Makefile:
+
+```nix
+{
+  inputs.mkutils.url = "github:Ja-sonYun/mkutils";
+  outputs = { nixpkgs, mkutils, ... }:
+    let pkgs = import nixpkgs {
+          system = "aarch64-darwin";
+          overlays = [ mkutils.overlays.default ];
+        };
+    in {
+      devShells.default = pkgs.mkShell { packages = [ pkgs.mkutils ]; };
+    };
+}
+```
+
+Inside `nix develop`, every `make` reads `utils.mk` first (via the `MAKEFILES` env var). You don't need `gnumake` in `packages` — the wrapper bundles it.
+
 ## Usage
 
 ### Help
