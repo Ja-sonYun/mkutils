@@ -3,6 +3,8 @@
 
 include dist/utils.mk
 
+$(call accept-args,demo-args)
+
 HELP_PROJECT_NAME := Example Project
 HELP_VERSION := 1.0.0
 

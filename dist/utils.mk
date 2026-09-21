@@ -160,8 +160,11 @@ pad-right = $(shell printf '%-*s' $(2) '$(1)' | tr ' ' '$(3)')
 #
 
 RUN_ARGS  := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
-$(eval $(RUN_ARGS):;@:)
 FIRST_ARG := $(firstword $(RUN_ARGS))
+
+define accept-args
+$(if $(and $(filter $(1),$(firstword $(MAKECMDGOALS))),$(RUN_ARGS)),$(eval $(RUN_ARGS):;@:))
+endef
 
 #
 # Messages
@@ -726,3 +729,4 @@ version: ## Show version information
 .DEFAULT_GOAL := help
 
 endif
+
