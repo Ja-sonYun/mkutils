@@ -25,7 +25,10 @@
         pkgs.stdenvNoCC.mkDerivation {
           pname = "mkutils-mk";
           version = "0.1.0";
-          src = ./.;
+          src = builtins.path {
+            path = ./.;
+            name = "source";
+          };
           buildPhase = "bash build.sh";
           installPhase = ''
             mkdir -p $out/share/mkutils
