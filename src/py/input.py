@@ -1,5 +1,6 @@
-import fcntl
+import codecs
 import os
+import select
 import sys
 
 ESC = "\x1b"
@@ -11,12 +12,8 @@ KEYS = {
     ESC + "[B": "down",
     ESC + "[C": "right",
     ESC + "[D": "left",
-    "k": "up",
-    "j": "down",
     "\r": "enter",
     "\n": "enter",
-    " ": "toggle",
-    "q": "quit",
     CTRL_C: "quit",
     CTRL_D: "quit",
     "\x7f": "backspace",
@@ -24,6 +21,14 @@ KEYS = {
     "\x01": "home",
     "\x05": "end",
     "\x17": "delete_word",
+}
+
+SELECTION_KEYS = {
+    **KEYS,
+    "k": "up",
+    "j": "down",
+    " ": "toggle",
+    "q": "quit",
 }
 
 
@@ -119,36 +124,31 @@ def str_width(s):
     return sum(char_width(c) for c in s)
 
 
-def get_key():
+def get_key() -> str:
     import termios
     import tty
 
     fd = sys.stdin.fileno()
     old = termios.tcgetattr(fd)
-    old_flags = fcntl.fcntl(fd, fcntl.F_GETFL)
     try:
-        tty.setraw(fd)
-        ch = sys.stdin.read(1)
+        tty.setraw(fd, termios.TCSANOW)
+        decoder = codecs.getincrementaldecoder(sys.stdin.encoding or "utf-8")(
+            errors="replace"
+        )
+        ch = ""
+        while not ch:
+            data = os.read(fd, 1)
+            if not data:
+                return CTRL_D
+            ch = decoder.decode(data)
         if ch == ESC:
-            fcntl.fcntl(fd, fcntl.F_SETFL, old_flags | os.O_NONBLOCK)
-            try:
-                ch += sys.stdin.read(2)
-            except:
-                pass
-        elif ord(ch) >= 0x80:
-            fcntl.fcntl(fd, fcntl.F_SETFL, old_flags | os.O_NONBLOCK)
-            try:
-                while True:
-                    b = sys.stdin.read(1)
-                    if not b:
-                        break
-                    ch += b
-            except:
-                pass
+            for _ in range(2):
+                if not select.select([fd], [], [], 0.03)[0]:
+                    break
+                ch += os.read(fd, 1).decode("ascii", errors="replace")
         return ch
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old)
-        fcntl.fcntl(fd, fcntl.F_SETFL, old_flags)
 
 
 def parse_option(raw):
@@ -192,7 +192,7 @@ def select_ui(options, prompt, default):
     sys.stderr.write(ANSI.hide_cursor())
     render(first=True)
     while True:
-        key = KEYS.get(get_key())
+        key = SELECTION_KEYS.get(get_key())
         if key == "up":
             idx = (idx - 1) % n
         elif key == "down":
@@ -240,7 +240,7 @@ def select_multi_ui(options, prompt, defaults):
     sys.stderr.write(ANSI.hide_cursor())
     render(first=True)
     while True:
-        key = KEYS.get(get_key())
+        key = SELECTION_KEYS.get(get_key())
         if key == "up":
             idx = (idx - 1) % n
         elif key == "down":
@@ -263,7 +263,7 @@ def select_multi_ui(options, prompt, defaults):
     return result
 
 
-def input_ui(prompt, default=""):
+def input_ui(prompt: str, default: str = "") -> str:
     if not sys.stdin.isatty():
         return default
     buf, cur = list(default), len(default)

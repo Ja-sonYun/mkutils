@@ -13,7 +13,7 @@ define deps-target
 $(eval _dt_pkg   := $(if $(6),$(6)/$(3),$(3)))
 $(eval _dt_lock  := $(if $(6),$(6)/$(4),$(4)))
 $(eval _dt_out   := $(if $(6),$(6)/$(5),$(5)))
-$(eval _dt_cmd   := $(if $(6),cd $(6) && $(2),$(2)))
+$(eval _dt_cmd   := $(if $(6),(cd "$(6)" && $(2)),$(2)))
 
 .PHONY: $(1)
 $(1): $(_dt_pkg) $(_dt_lock)
@@ -49,7 +49,7 @@ define deps-target-hash
 $(eval _dth_pkg  := $(if $(6),$(6)/$(3),$(3)))
 $(eval _dth_lock := $(if $(6),$(6)/$(4),$(4)))
 $(eval _dth_out  := $(if $(6),$(6)/$(5),$(5)))
-$(eval _dth_cmd  := $(if $(6),cd $(6) && $(2),$(2)))
+$(eval _dth_cmd  := $(if $(6),(cd "$(6)" && $(2)),$(2)))
 
 $(_dth_out)/.deps-hash: $(_dth_pkg) $(_dth_lock)
 	@printf '$(BLUE)[DEPS]$(RESET) Installing dependencies for $(YELLOW)$(1)$(RESET)...\n'
