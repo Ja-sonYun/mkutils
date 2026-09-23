@@ -128,7 +128,7 @@ endef
 #   $(call require-memory,4096,At least 4GB free memory required)
 define require-memory
 	@if [ "$(IS_MACOS)" = "Darwin" ]; then \
-		_free=$$(vm_stat | awk '/Pages free|Pages inactive/ {gsub(/\./,"",$$NF); sum+=$$NF} END {print int(sum*4096/1024/1024)}'); \
+		_free=$$(vm_stat | awk 'NR==1 {page_size=$$(NF-1)} /Pages free|Pages inactive/ {gsub(/\./,"",$$NF); sum+=$$NF} END {print int(sum*page_size/1024/1024)}'); \
 	else \
 		_free=$$(awk '/MemAvailable/ {print int($$2/1024)}' /proc/meminfo); \
 	fi; \
@@ -193,17 +193,17 @@ endef
 # Example:
 #   $(call wait-for-url,http://localhost:8080/health,30)
 define wait-for-url
-	@_url=$(1); _timeout=$(2); _elapsed=0; \
+	@_url=$(1); _timeout=$(2); _deadline=$$((SECONDS + _timeout)); _code=0; \
 	printf '$(BLUE)[WAIT]$(RESET) Waiting for %s...\n' "$$_url"; \
 	while true; do \
-		_code=$$(curl -s -o /dev/null -w '%{http_code}' "$$_url" 2>/dev/null || echo 0); \
-		if [ "$$_code" -ge 200 ] && [ "$$_code" -lt 300 ]; then break; fi; \
-		sleep 1; \
-		_elapsed=$$((_elapsed + 1)); \
-		if [ $$_elapsed -ge $$_timeout ]; then \
+		_remaining=$$((_deadline - SECONDS)); \
+		if [ "$$_remaining" -le 0 ]; then \
 			printf '$(RED)[ERROR]$(RESET) Timeout waiting for %s (last: %s)\n' "$$_url" "$$_code"; \
 			exit 1; \
 		fi; \
+		_code=$$(curl -s --max-time "$$_remaining" -o /dev/null -w '%{http_code}' "$$_url" 2>/dev/null) || _code=0; \
+		if [ "$$_code" -ge 200 ] && [ "$$_code" -lt 300 ]; then break; fi; \
+		if [ "$$SECONDS" -lt "$$_deadline" ]; then sleep 1; fi; \
 	done; \
 	printf '$(GREEN)[OK]$(RESET) %s is ready (HTTP %s)\n' "$$_url" "$$_code"
 endef
