@@ -36,4 +36,6 @@ help: ## Show this help message
 version: ## Show version information
 	@printf '%s %s\n' "$(HELP_PROJECT_NAME)" "$(HELP_VERSION)"
 
+ifeq ($(.DEFAULT_GOAL),)
 .DEFAULT_GOAL := help
+endif
