@@ -339,9 +339,9 @@ endef
 # Example:
 #   $(call require-args,dev|staging|prod,Usage: make deploy <env>)
 define require-args
-	@allowed=$$(printf '%s\n' '$(1)' | tr '|' ' '); \
-	if [ -z "$(FIRST_ARG)" ] || ! echo " $$allowed " | grep -q " $(FIRST_ARG) "; then \
-		printf '$(RED)[ERROR]$(RESET) Invalid argument: $(YELLOW)%s$(RESET) (allowed: %s)\n' "$(FIRST_ARG)" "$$allowed"; \
+	@arg='$(subst ','"'"',$(FIRST_ARG))'; allowed='$(subst ','"'"',$(1))'; \
+	if [ -z "$$arg" ] || ! printf '%s\n' "$$allowed" | tr '|' '\n' | grep -Fxq -- "$$arg"; then \
+		printf '$(RED)[ERROR]$(RESET) Invalid argument: $(YELLOW)%s$(RESET) (allowed: %s)\n' "$$arg" "$${allowed//|/ }"; \
 		printf '$(DIM)        %s$(RESET)\n' "$(2)"; \
 		exit 1; \
 	fi
@@ -461,17 +461,15 @@ endef
 # Example:
 #   $(call wait-for-port,localhost,5432,30)
 define wait-for-port
-	@_host=$(1); _port=$(2); _timeout=$(3); _elapsed=0; \
+	@_host="$(1)"; _port="$(2)"; _timeout="$(3)"; \
 	printf '$(BLUE)[WAIT]$(RESET) Waiting for %s:%s...\n' "$$_host" "$$_port"; \
-	while ! nc -z "$$_host" "$$_port" 2>/dev/null; do \
-		sleep 1; \
-		_elapsed=$$((_elapsed + 1)); \
-		if [ $$_elapsed -ge $$_timeout ]; then \
-			printf '$(RED)[ERROR]$(RESET) Timeout waiting for %s:%s\n' "$$_host" "$$_port"; \
-			exit 1; \
-		fi; \
-	done; \
-	printf '$(GREEN)[OK]$(RESET) %s:%s is ready\n' "$$_host" "$$_port"
+	if [ "$$_timeout" -gt 0 ] && timeout "$$_timeout" "$(SHELL)" -c \
+		'until nc -z "$$1" "$$2" 2>/dev/null; do sleep 1; done' wait-for-port "$$_host" "$$_port"; then \
+		printf '$(GREEN)[OK]$(RESET) %s:%s is ready\n' "$$_host" "$$_port"; \
+	else \
+		printf '$(RED)[ERROR]$(RESET) Timeout waiting for %s:%s\n' "$$_host" "$$_port"; \
+		exit 1; \
+	fi
 endef
 
 # $(call wait-for-url,url,timeout)
@@ -556,7 +554,8 @@ $(eval _dt_cmd   := $(if $(6),(cd "$(6)" && $(2)),$(2)))
 .PHONY: $(1)
 $(1): $(_dt_pkg) $(_dt_lock)
 	@printf '$(BLUE)[DEPS]$(RESET) Installing dependencies for $(YELLOW)$(1)$(RESET)...\n'
-	@if [ ! -d "$(_dt_out)" ] || [ "$(_dt_pkg)" -nt "$(_dt_out)/.installed" ] || [ "$(_dt_lock)" -nt "$(_dt_out)/.installed" ]; then \
+	@set -e; if [ ! -f "$(_dt_out)/.installed" ] || [ "$(_dt_pkg)" -nt "$(_dt_out)/.installed" ] || [ "$(_dt_lock)" -nt "$(_dt_out)/.installed" ]; then \
+		rm -f -- "$(_dt_out)/.installed"; \
 		$(_dt_cmd); \
 		mkdir -p "$(_dt_out)"; \
 		touch "$(_dt_out)/.installed"; \
@@ -568,6 +567,7 @@ $(1): $(_dt_pkg) $(_dt_lock)
 .PHONY: $(1)-force
 $(1)-force:
 	@printf '$(YELLOW)[FORCE]$(RESET) Force installing dependencies for $(YELLOW)$(1)$(RESET)...\n'
+	@rm -f -- "$(_dt_out)/.installed"
 	$(_dt_cmd)
 	@mkdir -p "$(_dt_out)"
 	@touch "$(_dt_out)/.installed"
@@ -578,7 +578,7 @@ $(1)-clean:
 	rm -rf -- "$(_dt_out)"
 endef
 
-# $(eval $(call deps-target-hash,name,cmd,pkg,lock,outdir[,folder]))
+# $(eval $(call deps-target-hash,name,cmd,pkg,lock,outdir[,folder[,generate-lock]]))
 # --------------------------------
 # Example:
 #   $(eval $(call deps-target-hash,py-deps,pip install -r requirements.txt,requirements.txt,requirements.lock,.venv))
@@ -588,27 +588,40 @@ $(eval _dth_pkg  := $(if $(6),$(6)/$(3),$(3)))
 $(eval _dth_lock := $(if $(6),$(6)/$(4),$(4)))
 $(eval _dth_out  := $(if $(6),$(6)/$(5),$(5)))
 $(eval _dth_cmd  := $(if $(6),(cd "$(6)" && $(2)),$(2)))
+$(eval _dth_hash_cmd := $(_HASH_CMD) "$(_dth_pkg)" "$(_dth_lock)")
 
 .PHONY: $(1) $(1)-force
-$(1) $(1)-force: $(_dth_pkg) $(_dth_lock)
+$(1): $(_dth_lock)
+$(1)-force: $(if $(filter generate-lock,$(7)),,$(_dth_lock))
+$(1) $(1)-force: $(_dth_pkg)
 	@set -e; \
-	hash=$$$$($(_HASH_CMD) "$(_dth_pkg)" "$(_dth_lock)"); \
 	marker="$(_dth_out)/.deps-hash"; \
-	if [ "$$@" != "$(1)-force" ] && [ -f "$$$$marker" ] && [ "$$$$hash" = "$$$$(cat "$$$$marker")" ]; then \
+	pkg_hash=$$$$($(_HASH_CMD) "$(_dth_pkg)"); \
+	if [ "$$@" = "$(1)-force" ] && [ "$(7)" = "generate-lock" ] && [ ! -e "$(_dth_lock)" ]; then \
+		lock_hash=; \
+	else \
+		lock_hash=$$$$($(_HASH_CMD) "$(_dth_lock)"); \
+	fi; \
+	if [ "$$@" != "$(1)-force" ] && [ -f "$$$$marker" ] && \
+	   printf '%s\n' "$$$$pkg_hash" "$$$$lock_hash" | cmp -s - "$$$$marker"; then \
 		exit 0; \
 	fi; \
 	printf '$(BLUE)[DEPS]$(RESET) Installing dependencies for $(YELLOW)$(1)$(RESET)...\n'; \
+	rm -f -- "$$$$marker"; \
 	$(_dth_cmd); \
 	mkdir -p "$(_dth_out)"; \
 	tmp=$$$$(mktemp "$$$$marker.XXXXXX"); \
 	trap 'rm -f "$$$$tmp"' EXIT; \
-	printf '%s\n' "$$$$hash" > "$$$$tmp"; \
+	if [ "$(7)" = "generate-lock" ]; then \
+		lock_hash=$$$$($(_HASH_CMD) "$(_dth_lock)"); \
+	fi; \
+	printf '%s\n' "$$$$pkg_hash" "$$$$lock_hash" > "$$$$tmp"; \
 	mv -f "$$$$tmp" "$$$$marker"; \
 	printf '$(GREEN)[OK]$(RESET) Dependencies installed for $(YELLOW)$(1)$(RESET)\n'
 
 .PHONY: $(1)-check
 $(1)-check:
-	@if [ -f "$(_dth_out)/.deps-hash" ] && hash=$$$$($(_HASH_CMD) "$(_dth_pkg)" "$(_dth_lock)") && \
+	@if [ -f "$(_dth_out)/.deps-hash" ] && hash=$$$$($(_dth_hash_cmd)) && \
 	   [ "$$$$hash" = "$$$$(cat "$(_dth_out)/.deps-hash")" ]; then \
 		printf '$(GREEN)[OK]$(RESET) Dependencies for $(YELLOW)$(1)$(RESET) are up to date\n'; \
 	else \
@@ -667,7 +680,7 @@ endef
 #   $(eval $(call deps-poetry,py-deps))
 #   $(eval $(call deps-poetry,backend-deps,backend))
 define deps-poetry
-$(eval $(call deps-target-hash,$(1),poetry install,pyproject.toml,poetry.lock,.venv,$(2)))
+$(eval $(call deps-target-hash,$(1),poetry install,pyproject.toml,poetry.lock,.venv,$(2),generate-lock))
 endef
 
 # $(eval $(call deps-uv,name[,folder]))
@@ -676,7 +689,7 @@ endef
 #   $(eval $(call deps-uv,py-deps))
 #   $(eval $(call deps-uv,backend-deps,backend))
 define deps-uv
-$(eval $(call deps-target-hash,$(1),uv sync,pyproject.toml,uv.lock,.venv,$(2)))
+$(eval $(call deps-target-hash,$(1),uv sync,pyproject.toml,uv.lock,.venv,$(2),generate-lock))
 endef
 
 # $(eval $(call deps-pip,name[,folder]))
@@ -685,7 +698,8 @@ endef
 #   $(eval $(call deps-pip,py-deps))
 #   $(eval $(call deps-pip,backend-deps,backend))
 define deps-pip
-$(eval $(call deps-target-hash,$(1),pip install -r requirements.txt,requirements.txt,requirements.txt,.venv,$(2)))
+$(eval $(call deps-target-hash,$(1),{ test -x .venv/bin/python || python3 -m venv .venv; \
+	.venv/bin/python -m pip install -r requirements.txt; },requirements.txt,requirements.txt,.venv,$(2)))
 endef
 
 #
@@ -694,16 +708,10 @@ endef
 
 HELP_PROJECT_NAME ?= Project
 HELP_VERSION_FILE ?=
-HELP_VERSION      ?=
+HELP_VERSION      ?= $(if $(wildcard $(HELP_VERSION_FILE)),$(shell awk -F'[":=, \t]+' '/[Vv]ersion/ { \
+	for(i=1;i<=NF;i++) if($$i ~ /^[0-9]+\.[0-9]/) { print $$i; exit } \
+}' '$(subst ','"'"',$(HELP_VERSION_FILE))'))
 HELP_WIDTH        ?= 20
-
-ifdef HELP_VERSION_FILE
-	ifneq ($(wildcard $(HELP_VERSION_FILE)),)
-		HELP_VERSION := $(shell awk -F'[":=, \t]+' '/[Vv]ersion/ { \
-			for(i=1;i<=NF;i++) if($$i ~ /^[0-9]+\.[0-9]/) { print $$i; exit } \
-		}' $(HELP_VERSION_FILE))
-	endif
-endif
 
 # Help AWK script (base64 encoded)
 _HELP_AWK_B64 := QkVHSU4gewoJRlMgPSAiOi4qIyMgIgoJaWYgKG5vX2NvbG9yID09ICIiIHx8IG5vX2NvbG9yID09ICIwIikgewoJCUNfUkVTRVQgPSAiXDAzM1swbSIKCQlDX0JPTEQgPSAiXDAzM1sxbSIKCQlDX0RJTSA9ICJcMDMzWzJtIgoJCUNfR1JFRU4gPSAiXDAzM1swOzMybSIKCQlDX1lFTExPVyA9ICJcMDMzWzA7MzNtIgoJCUNfQkxVRSA9ICJcMDMzWzA7MzRtIgoJCUNfQ1lBTiA9ICJcMDMzWzA7MzZtIgoJfQoJaWYgKHByb2plY3QgPT0gIiIpIHsKCQlwcm9qZWN0ID0gIlByb2plY3QiCgl9CglpZiAod2lkdGggPT0gIiIpIHsKCQl3aWR0aCA9IDIwCgl9CgljYXRfY291bnQgPSAwCgl0YXJnZXRfY291bnQgPSAwCgljdXJyZW50X2NhdCA9ICIiCn0KCi9eIyNALyB7CgljdXJyZW50X2NhdCA9IHN1YnN0cigkMCwgNSkKCWlmICghIChjdXJyZW50X2NhdCBpbiBjYXRfc2VlbikpIHsKCQljYXRfc2VlbltjdXJyZW50X2NhdF0gPSAxCgkJY2F0X29yZGVyWysrY2F0X2NvdW50XSA9IGN1cnJlbnRfY2F0Cgl9CgluZXh0Cn0KCi9eW2EtekEtWjAtOV8tXSs6Lio/IyMgLyB7Cgl0YXJnZXQgPSAkMQoJZGVzYyA9ICQyCgl0YXJnZXRfb3JkZXJbKyt0YXJnZXRfY291bnRdID0gdGFyZ2V0Cgl0YXJnZXRfZGVzY1t0YXJnZXRdID0gZGVzYwoJdGFyZ2V0X2NhdFt0YXJnZXRdID0gY3VycmVudF9jYXQKfQoKRU5EIHsKCXByaW50ZiAiJXMlcyVzJXMiLCBDX0JPTEQsIENfQkxVRSwgcHJvamVjdCwgQ19SRVNFVAoJaWYgKHZlcnNpb24gIT0gIiIpIHsKCQlwcmludGYgIiAlc3YlcyVzIiwgQ19ESU0sIHZlcnNpb24sIENfUkVTRVQKCX0KCXByaW50ZiAiXG4iCglpZiAoZGVzY3JpcHRpb24gIT0gIiIpIHsKCQlwcmludGYgIiVzIiwgQ19ESU0KCQluID0gc3BsaXQoZGVzY3JpcHRpb24sIGxpbmVzLCAiXG4iKQoJCWZvciAoaSA9IDE7IGkgPD0gbjsgaSsrKSB7CgkJCXByaW50ZiAiICAlc1xuIiwgbGluZXNbaV0KCQl9CgkJcHJpbnRmICIlcyIsIENfUkVTRVQKCX0gZWxzZSB7CgkJcHJpbnRmICJcbiIKCX0KCXByaW50ZiAiJXNVc2FnZTolcyBtYWtlIFt0YXJnZXRdIFtWQVJJQUJMRT12YWx1ZV1cblxuIiwgQ19ZRUxMT1csIENfUkVTRVQKCWlmIChleGFtcGxlcyAhPSAiIikgewoJCXByaW50ZiAiJXNFeGFtcGxlczolc1xuJXMiLCBDX1lFTExPVywgQ19SRVNFVCwgQ19ESU0KCQluID0gc3BsaXQoZXhhbXBsZXMsIGxpbmVzLCAiXG4iKQoJCWZvciAoaSA9IDE7IGkgPD0gbjsgaSsrKSB7CgkJCXByaW50ZiAiICAlc1xuIiwgbGluZXNbaV0KCQl9CgkJcHJpbnRmICIlc1xuIiwgQ19SRVNFVAoJfQoJaWYgKHZhcmlhYmxlcyAhPSAiIikgewoJCXByaW50ZiAiJXNWYXJpYWJsZXM6JXNcbiVzIiwgQ19ZRUxMT1csIENfUkVTRVQsIENfRElNCgkJbiA9IHNwbGl0KHZhcmlhYmxlcywgbGluZXMsICJcbiIpCgkJZm9yIChpID0gMTsgaSA8PSBuOyBpKyspIHsKCQkJcHJpbnRmICIgICVzXG4iLCBsaW5lc1tpXQoJCX0KCQlwcmludGYgIiVzXG4iLCBDX1JFU0VUCgl9CglwcmludGYgIiVzVGFyZ2V0czolc1xuIiwgQ19ZRUxMT1csIENfUkVTRVQKCWZvciAoaSA9IDE7IGkgPD0gdGFyZ2V0X2NvdW50OyBpKyspIHsKCQl0ID0gdGFyZ2V0X29yZGVyW2ldCgkJY2F0ID0gdGFyZ2V0X2NhdFt0XQoJCWlmICghIChjYXQgaW4gcHJpbnRlZF9jYXQpKSB7CgkJCXByaW50ZWRfY2F0W2NhdF0gPSAxCgkJCWlmIChjYXQgIT0gIiIpIHsKCQkJCXByaW50ZiAiXG4gICVzJXMlc1xuIiwgQ19DWUFOLCBjYXQsIENfUkVTRVQKCQkJfQoJCX0KCQlwcmludGYgIiAgICAlcyUtKnMlcyAlc1xuIiwgQ19HUkVFTiwgd2lkdGgsIHQsIENfUkVTRVQsIHRhcmdldF9kZXNjW3RdCgl9CglwcmludGYgIlxuIgp9Cg==
@@ -711,15 +719,18 @@ _HELP_AWK_B64 := QkVHSU4gewoJRlMgPSAiOi4qIyMgIgoJaWYgKG5vX2NvbG9yID09ICIiIHx8IG5
 ##@ Help
 
 .PHONY: help
+help: export _help_description = $(HELP_DESCRIPTION)
+help: export _help_examples = $(HELP_EXAMPLES)
+help: export _help_variables = $(HELP_VARIABLES)
 help: ## Show this help message
 	@printf '%s' '$(_HELP_AWK_B64)' | $(_B64_DEC) | awk -f - \
 		-v project="$(HELP_PROJECT_NAME)" \
 		-v version="$(HELP_VERSION)" \
 		-v width="$(HELP_WIDTH)" \
 		-v no_color="$(NO_COLOR)" \
-		-v description="$${HELP_DESCRIPTION:-}" \
-		-v examples="$${HELP_EXAMPLES:-}" \
-		-v variables="$${HELP_VARIABLES:-}" \
+		-v description="$$_help_description" \
+		-v examples="$$_help_examples" \
+		-v variables="$$_help_variables" \
 		$(MAKEFILE_LIST)
 
 .PHONY: version

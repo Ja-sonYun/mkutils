@@ -53,9 +53,9 @@ endef
 # Example:
 #   $(call require-args,dev|staging|prod,Usage: make deploy <env>)
 define require-args
-	@allowed=$$(printf '%s\n' '$(1)' | tr '|' ' '); \
-	if [ -z "$(FIRST_ARG)" ] || ! echo " $$allowed " | grep -q " $(FIRST_ARG) "; then \
-		printf '$(RED)[ERROR]$(RESET) Invalid argument: $(YELLOW)%s$(RESET) (allowed: %s)\n' "$(FIRST_ARG)" "$$allowed"; \
+	@arg='$(subst ','"'"',$(FIRST_ARG))'; allowed='$(subst ','"'"',$(1))'; \
+	if [ -z "$$arg" ] || ! printf '%s\n' "$$allowed" | tr '|' '\n' | grep -Fxq -- "$$arg"; then \
+		printf '$(RED)[ERROR]$(RESET) Invalid argument: $(YELLOW)%s$(RESET) (allowed: %s)\n' "$$arg" "$${allowed//|/ }"; \
 		printf '$(DIM)        %s$(RESET)\n' "$(2)"; \
 		exit 1; \
 	fi
@@ -175,17 +175,15 @@ endef
 # Example:
 #   $(call wait-for-port,localhost,5432,30)
 define wait-for-port
-	@_host=$(1); _port=$(2); _timeout=$(3); _elapsed=0; \
+	@_host="$(1)"; _port="$(2)"; _timeout="$(3)"; \
 	printf '$(BLUE)[WAIT]$(RESET) Waiting for %s:%s...\n' "$$_host" "$$_port"; \
-	while ! nc -z "$$_host" "$$_port" 2>/dev/null; do \
-		sleep 1; \
-		_elapsed=$$((_elapsed + 1)); \
-		if [ $$_elapsed -ge $$_timeout ]; then \
-			printf '$(RED)[ERROR]$(RESET) Timeout waiting for %s:%s\n' "$$_host" "$$_port"; \
-			exit 1; \
-		fi; \
-	done; \
-	printf '$(GREEN)[OK]$(RESET) %s:%s is ready\n' "$$_host" "$$_port"
+	if [ "$$_timeout" -gt 0 ] && timeout "$$_timeout" "$(SHELL)" -c \
+		'until nc -z "$$1" "$$2" 2>/dev/null; do sleep 1; done' wait-for-port "$$_host" "$$_port"; then \
+		printf '$(GREEN)[OK]$(RESET) %s:%s is ready\n' "$$_host" "$$_port"; \
+	else \
+		printf '$(RED)[ERROR]$(RESET) Timeout waiting for %s:%s\n' "$$_host" "$$_port"; \
+		exit 1; \
+	fi
 endef
 
 # $(call wait-for-url,url,timeout)

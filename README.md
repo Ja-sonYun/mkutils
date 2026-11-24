@@ -17,7 +17,7 @@ Makefile utilities
 
 - `sha256sum` or `shasum` (deps functions)
 - `lsof` (require-ports)
-- `nc` (wait-for-port)
+- `nc` and `timeout` (wait-for-port)
 - `curl` (wait-for-url)
 
 ## Installation
@@ -41,7 +41,7 @@ Use the overlay to get a wrapped `make` that always includes `utils.mk` — no `
           overlays = [ mkutils.overlays.default ];
         };
     in {
-      devShells.default = pkgs.mkShell { packages = [ pkgs.mkutils ]; };
+      devShells.aarch64-darwin.default = pkgs.mkShell { packages = [ pkgs.mkutils ]; };
     };
 }
 ```
@@ -66,12 +66,14 @@ build: ## Build the project
 ### Args
 
 ```makefile
+$(call accept-args,run)
+
 run: ## Run with arguments
 	./app $(RUN_ARGS)
 ```
 
 ```bash
-make run -- --verbose --config=prod
+make run -- --verbose --config prod
 ```
 
 **Variables:** `$(RUN_ARGS)` `$(FIRST_ARG)`
@@ -95,7 +97,8 @@ endif
 
 ```makefile
 # Cross-platform file replacement (handles macOS/Linux sed -i difference)
-$(call replace,old,new,file.txt)
+update-file:
+	$(call replace,old,new,file.txt)
 
 # Semver version bump
 NEW := $(call semver-bump,patch,1.2.3)  # 1.2.4
@@ -156,7 +159,7 @@ build:
 	$(call msg-header,"Title")
 	$(call msg-sep)
 	$(call msg-cmd,"npm install")      # display only
-	$(call run-cmd,"npm install")      # display and run
+	$(call run-cmd,npm install)        # display and run
 	$(call confirm-run,rm -rf dist)                # confirm before run
 	$(call confirm-run,rm -rf dist,Delete dist?)   # custom message
 	$(call msg-status,PASS,"Test passed")
@@ -180,6 +183,7 @@ build:
 	$(call require-memory,4096,At least 4GB free memory required)
 	$(call require-storage,10240,At least 10GB free disk space required)
 
+$(call accept-args,deploy)
 deploy:
 	$(call require-args,dev|prod|staging,Use: dev prod staging)
 	$(call confirm,Deploy to $(FIRST_ARG)?)
@@ -273,6 +277,7 @@ $(eval $(call deps-uv,backend-deps,backend))
 | `deps-pip`    | `pip install -r requirements.txt` | requirements.txt  | .venv        |
 
 All presets use `deps-target-hash` (content hash detection) internally.
+`deps-pip` creates `.venv` with `python3 -m venv` if needed and installs with that environment's Python.
 
 ## Examples
 

@@ -4,5 +4,5 @@
 build:
 	./build.sh
 
-test:
-	bats tests/*.bats
+test: build
+	env -u MAKEFILES PATH="$(if $(filter /%,$(MAKE_COMMAND)),$(dir $(MAKE_COMMAND)):)$$PATH" bats tests/*.bats

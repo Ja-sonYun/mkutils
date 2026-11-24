@@ -7,6 +7,8 @@ setup() {
     cat > "$TEST_TEMP_DIR/Makefile" << 'EOF'
 include utils.mk
 
+$(call accept-args,test-args test-require-args test-require-args-fail)
+
 test-args:
 	@echo "ARGS: $(RUN_ARGS)"
 

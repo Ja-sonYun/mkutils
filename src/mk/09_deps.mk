@@ -18,7 +18,8 @@ $(eval _dt_cmd   := $(if $(6),(cd "$(6)" && $(2)),$(2)))
 .PHONY: $(1)
 $(1): $(_dt_pkg) $(_dt_lock)
 	@printf '$(BLUE)[DEPS]$(RESET) Installing dependencies for $(YELLOW)$(1)$(RESET)...\n'
-	@if [ ! -d "$(_dt_out)" ] || [ "$(_dt_pkg)" -nt "$(_dt_out)/.installed" ] || [ "$(_dt_lock)" -nt "$(_dt_out)/.installed" ]; then \
+	@set -e; if [ ! -f "$(_dt_out)/.installed" ] || [ "$(_dt_pkg)" -nt "$(_dt_out)/.installed" ] || [ "$(_dt_lock)" -nt "$(_dt_out)/.installed" ]; then \
+		rm -f -- "$(_dt_out)/.installed"; \
 		$(_dt_cmd); \
 		mkdir -p "$(_dt_out)"; \
 		touch "$(_dt_out)/.installed"; \
@@ -30,6 +31,7 @@ $(1): $(_dt_pkg) $(_dt_lock)
 .PHONY: $(1)-force
 $(1)-force:
 	@printf '$(YELLOW)[FORCE]$(RESET) Force installing dependencies for $(YELLOW)$(1)$(RESET)...\n'
+	@rm -f -- "$(_dt_out)/.installed"
 	$(_dt_cmd)
 	@mkdir -p "$(_dt_out)"
 	@touch "$(_dt_out)/.installed"
@@ -40,7 +42,7 @@ $(1)-clean:
 	rm -rf -- "$(_dt_out)"
 endef
 
-# $(eval $(call deps-target-hash,name,cmd,pkg,lock,outdir[,folder]))
+# $(eval $(call deps-target-hash,name,cmd,pkg,lock,outdir[,folder[,generate-lock]]))
 # --------------------------------
 # Example:
 #   $(eval $(call deps-target-hash,py-deps,pip install -r requirements.txt,requirements.txt,requirements.lock,.venv))
@@ -50,27 +52,40 @@ $(eval _dth_pkg  := $(if $(6),$(6)/$(3),$(3)))
 $(eval _dth_lock := $(if $(6),$(6)/$(4),$(4)))
 $(eval _dth_out  := $(if $(6),$(6)/$(5),$(5)))
 $(eval _dth_cmd  := $(if $(6),(cd "$(6)" && $(2)),$(2)))
+$(eval _dth_hash_cmd := $(_HASH_CMD) "$(_dth_pkg)" "$(_dth_lock)")
 
 .PHONY: $(1) $(1)-force
-$(1) $(1)-force: $(_dth_pkg) $(_dth_lock)
+$(1): $(_dth_lock)
+$(1)-force: $(if $(filter generate-lock,$(7)),,$(_dth_lock))
+$(1) $(1)-force: $(_dth_pkg)
 	@set -e; \
-	hash=$$$$($(_HASH_CMD) "$(_dth_pkg)" "$(_dth_lock)"); \
 	marker="$(_dth_out)/.deps-hash"; \
-	if [ "$$@" != "$(1)-force" ] && [ -f "$$$$marker" ] && [ "$$$$hash" = "$$$$(cat "$$$$marker")" ]; then \
+	pkg_hash=$$$$($(_HASH_CMD) "$(_dth_pkg)"); \
+	if [ "$$@" = "$(1)-force" ] && [ "$(7)" = "generate-lock" ] && [ ! -e "$(_dth_lock)" ]; then \
+		lock_hash=; \
+	else \
+		lock_hash=$$$$($(_HASH_CMD) "$(_dth_lock)"); \
+	fi; \
+	if [ "$$@" != "$(1)-force" ] && [ -f "$$$$marker" ] && \
+	   printf '%s\n' "$$$$pkg_hash" "$$$$lock_hash" | cmp -s - "$$$$marker"; then \
 		exit 0; \
 	fi; \
 	printf '$(BLUE)[DEPS]$(RESET) Installing dependencies for $(YELLOW)$(1)$(RESET)...\n'; \
+	rm -f -- "$$$$marker"; \
 	$(_dth_cmd); \
 	mkdir -p "$(_dth_out)"; \
 	tmp=$$$$(mktemp "$$$$marker.XXXXXX"); \
 	trap 'rm -f "$$$$tmp"' EXIT; \
-	printf '%s\n' "$$$$hash" > "$$$$tmp"; \
+	if [ "$(7)" = "generate-lock" ]; then \
+		lock_hash=$$$$($(_HASH_CMD) "$(_dth_lock)"); \
+	fi; \
+	printf '%s\n' "$$$$pkg_hash" "$$$$lock_hash" > "$$$$tmp"; \
 	mv -f "$$$$tmp" "$$$$marker"; \
 	printf '$(GREEN)[OK]$(RESET) Dependencies installed for $(YELLOW)$(1)$(RESET)\n'
 
 .PHONY: $(1)-check
 $(1)-check:
-	@if [ -f "$(_dth_out)/.deps-hash" ] && hash=$$$$($(_HASH_CMD) "$(_dth_pkg)" "$(_dth_lock)") && \
+	@if [ -f "$(_dth_out)/.deps-hash" ] && hash=$$$$($(_dth_hash_cmd)) && \
 	   [ "$$$$hash" = "$$$$(cat "$(_dth_out)/.deps-hash")" ]; then \
 		printf '$(GREEN)[OK]$(RESET) Dependencies for $(YELLOW)$(1)$(RESET) are up to date\n'; \
 	else \
@@ -129,7 +144,7 @@ endef
 #   $(eval $(call deps-poetry,py-deps))
 #   $(eval $(call deps-poetry,backend-deps,backend))
 define deps-poetry
-$(eval $(call deps-target-hash,$(1),poetry install,pyproject.toml,poetry.lock,.venv,$(2)))
+$(eval $(call deps-target-hash,$(1),poetry install,pyproject.toml,poetry.lock,.venv,$(2),generate-lock))
 endef
 
 # $(eval $(call deps-uv,name[,folder]))
@@ -138,7 +153,7 @@ endef
 #   $(eval $(call deps-uv,py-deps))
 #   $(eval $(call deps-uv,backend-deps,backend))
 define deps-uv
-$(eval $(call deps-target-hash,$(1),uv sync,pyproject.toml,uv.lock,.venv,$(2)))
+$(eval $(call deps-target-hash,$(1),uv sync,pyproject.toml,uv.lock,.venv,$(2),generate-lock))
 endef
 
 # $(eval $(call deps-pip,name[,folder]))
@@ -147,5 +162,6 @@ endef
 #   $(eval $(call deps-pip,py-deps))
 #   $(eval $(call deps-pip,backend-deps,backend))
 define deps-pip
-$(eval $(call deps-target-hash,$(1),pip install -r requirements.txt,requirements.txt,requirements.txt,.venv,$(2)))
+$(eval $(call deps-target-hash,$(1),{ test -x .venv/bin/python || python3 -m venv .venv; \
+	.venv/bin/python -m pip install -r requirements.txt; },requirements.txt,requirements.txt,.venv,$(2)))
 endef
