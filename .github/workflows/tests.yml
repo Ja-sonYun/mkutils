@@ -24,6 +24,11 @@ jobs:
           support-install: true
           assert-install: true
 
+      - name: Generate the bundle used by Nix
+        run: |
+          ./build.sh
+          git diff --exit-code -- dist/utils.mk
+
       - name: Run tests
         env:
           TERM: xterm
